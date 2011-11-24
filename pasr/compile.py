@@ -63,7 +63,7 @@ class MatchNonTerminal(Production.Element):
 				return kv
 		return None
 
-class MatchAnything(Production.Element):
+class MatchAnyStar(Production.Element):
 	def __init__(self):
 		self.unitlength = False
 
@@ -82,6 +82,39 @@ class MatchStore(Production.Element):
 			kv = kv.copy()
 			kv[self.tag] = node.textrange(start, end)
 		return kv
+
+def make_production(productions, tag, elements, atstart=False, atend=False):
+	"""
+	Take the given set of flat matcher elements (no parenthesis nesting)
+	and translate them into productions.
+	"""
+	# productions only support two non-unit-length elements
+	nonunit = [i for i in range(len(elements)) if not elements[i].unitlength]
+	if len(nonunit) <= 2:
+		prod = Production(tag, elements)
+		prod.atstart = atstart
+		prod.atend = atend
+		productions.append(prod)
+		return
+
+	prev = []
+	prevend = nonunit[0]
+	nr = 1
+	while nr+1 < len(nonunit):
+		subtag = Tag(str(tag) + ":split:" + str(nr))
+		prod = Production(subtag, prev + elements[prevend:nonunit[nr]+1])
+		prod.atstart = atstart and nonunit[0] == 0
+		# never atend
+		productions.append(prod)
+
+		prev = [MatchNonTerminal(subtag)]
+		prevend = nonunit[nr]+1
+		nr += 1
+
+	prod = Production(tag, elements[:nonunit[0]] + prev + elements[prevend:])
+	prod.atstart = atstart
+	prod.atend = atend
+	productions.append(prod)
 
 def compile(tag, expr, tokenizer, treeify, options=Options()):
 	"""
@@ -130,6 +163,9 @@ def compile(tag, expr, tokenizer, treeify, options=Options()):
 
 				match = MatchNonTerminal(text[pos:end])
 				pos = end+1
+		elif text[pos] == '*':
+			pos += 1
+			match = MatchAnyStar()
 		else:
 			raise TextError(text, pos, "unknown escape sequence '%s'" % (text[pos]))
 
@@ -156,10 +192,7 @@ def compile(tag, expr, tokenizer, treeify, options=Options()):
 
 			nestcounter[0] += 1
 			subtag = Tag(str(tag) + ":nest" + str(nestcounter[0]))
-			prod = Production(subtag, eltstack[-1])
-			prod.atstart = True
-			prod.atend = True
-			productions.append(prod)
+			make_production(productions, subtag, eltstack[-1], atstart=True, atend=True)
 
 			eltstack.pop()
 			pos.pop()
@@ -188,5 +221,5 @@ def compile(tag, expr, tokenizer, treeify, options=Options()):
 		pos[-1] += 1
 
 	assert len(eltstack) == 1
-	productions.append(Production(tag, eltstack[0]))
+	make_production(productions, tag, eltstack[0])
 	return productions
