@@ -1,0 +1,7 @@
+
+qname = $(id) :: $(qname)
+qname = $(id) :: $(id)
+r = boost::bind(& $(qname), $(( boost::ref(*this) ))|ref| $*)
+
+r:
+	replace ref "this"

@@ -247,8 +247,8 @@ class Match(object):
 					node.addmatch(idx, idx+1, elt.token.tag, {})
 			else:
 				if len(elt.annotations) > 0:
-					for name,kv in elt.matches(0, len(elt.annotations)):
-						node.addmatch(idx, idx+1, name, kv)
+					for tag,kv in elt.matches(0, len(elt.annotations)):
+						node.addmatch(idx, idx+1, tag, kv)
 
 		# Allow all productions to mark their potential unitlength entrypoints
 		unitlengthcaches = []
@@ -260,3 +260,27 @@ class Match(object):
 			for idx in range(len(self.productions)):
 				self.productions[idx].produce(node, length, unitlengthcaches[idx])
 
+	def forgreedymax(self, tag, fn):
+		"""
+		Call the given function with the key-value mappings for a greedy selection
+		of inclusion-wise maximal occurences of the given tag.
+		"""
+		def visit(node):
+			start = 0
+			while start < len(node.token):
+				for end in range(len(node.token), start, -1):
+					matches = node.matches(start, end)
+					for t, kv in matches:
+						if t == tag:
+							fn(kv)
+							break
+					else:
+						continue
+					start = end
+					break
+				else:
+					if type(node.token[start]) == list:
+						visit(node.annotations[start])
+					start += 1
+
+		visit(self.tree)

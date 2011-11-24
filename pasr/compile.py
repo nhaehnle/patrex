@@ -26,7 +26,9 @@ Compile context-free grammar productions from a simple and more or less
 concise language.
 """
 
-from cyk import Production
+import re
+
+from cyk import Production, Tag
 from text import TextError, TextRange
 
 class Options(object):
@@ -81,11 +83,12 @@ class MatchStore(Production.Element):
 			kv[self.tag] = node.textrange(start, end)
 		return kv
 
-def compile(name, expr, tokenizer, treeify, options=Options()):
+def compile(tag, expr, tokenizer, treeify, options=Options()):
 	"""
 	Return a list of productions needed to represent the given expression
 	"""
 	productions = []
+	nestcounter = [0]
 
 	# This sub-routine handles parsing $ escapes
 	escaped = [False]
@@ -101,12 +104,32 @@ def compile(name, expr, tokenizer, treeify, options=Options()):
 
 		if text[pos] == '(':
 			pos += 1
-			end = text.find(')', pos)
-			if end == -1:
-				raise TextError(text, pos, "unclosed $(...)")
+			if text[pos] == '=' or text[pos] == '(':
+				# recursive match
+				m = re.compile("=*\\(").match(text, pos)
+				if not m:
+					raise TextError(text, pos, "bad recursive match opening")
 
-			match = MatchNonTerminal(text[pos:end])
-			pos = end+1
+				nrequals = m.end() - pos - 1
+				pos = m.end()
+				end = text.find(')' + '=' * nrequals + ')', pos)
+				if end == -1:
+					raise TextError(text, pos, "recursive match not closed")
+
+				nestcounter[0] += 1
+				subtag = Tag(str(tag) + ":rec" + str(nestcounter[0]))
+				productions.extend(compile(subtag, text[pos:end], tokenizer, treeify, options))
+
+				match = MatchNonTerminal(subtag)
+				pos = end + nrequals + 2
+			else:
+				# simple non-terminal match
+				end = text.find(')', pos)
+				if end == -1:
+					raise TextError(text, pos, "unclosed $(...)")
+
+				match = MatchNonTerminal(text[pos:end])
+				pos = end+1
 		else:
 			raise TextError(text, pos, "unknown escape sequence '%s'" % (text[pos]))
 
@@ -126,15 +149,14 @@ def compile(name, expr, tokenizer, treeify, options=Options()):
 	pos = [0]
 	blocks = [tree]
 
-	nestcounter = 0
 	while pos:
 		if pos[-1] >= len(blocks[-1]):
 			if len(pos) == 1:
 				break
 
-			nestcounter += 1
-			tag = Tag(name + ":nest" + str(nestcounter))
-			prod = Production(tag, eltstack[-1])
+			nestcounter[0] += 1
+			subtag = Tag(str(tag) + ":nest" + str(nestcounter[0]))
+			prod = Production(subtag, eltstack[-1])
 			prod.atstart = True
 			prod.atend = True
 			productions.append(prod)
@@ -144,7 +166,7 @@ def compile(name, expr, tokenizer, treeify, options=Options()):
 			blocks.pop()
 			pos[-1] += 1
 
-			match = MatchNonTerminal(tag)
+			match = MatchNonTerminal(subtag)
 			match.unitlength = True
 			eltstack[-1].append(match)
 			continue
@@ -166,5 +188,5 @@ def compile(name, expr, tokenizer, treeify, options=Options()):
 		pos[-1] += 1
 
 	assert len(eltstack) == 1
-	productions.append(Production(name, eltstack[0]))
+	productions.append(Production(tag, eltstack[0]))
 	return productions

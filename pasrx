@@ -1,0 +1,215 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2011 Nicolai Hähnle
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to
+# deal in the Software without restriction, including without limitation the
+# rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+# sell copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+# IN THE SOFTWARE.
+#
+
+"""
+Command-line utility
+"""
+
+import argparse
+import re
+import sys
+
+import pasr
+import pasr.compile
+import pasr.cpp
+import pasr.text
+
+## GLOBAL VARIABLES AND ARGUMENTS
+productions = []
+programs = {}
+tokenizer = pasr.cpp.tokenizer
+treeify = pasr.cpp.treeify
+editor = None
+
+parser = argparse.ArgumentParser(description='Parenthesis-aware context-free grammar based file processing.')
+parser.add_argument('script', metavar='script', type=str, help='CFG definition and command script')
+parser.add_argument('inputs', metavar='FILE', type=str, nargs='*', help='input file(s); if not set, read from STDIN')
+
+args = parser.parse_args()
+
+## SUBROUTINES
+
+def make_program(name, lst):
+	global programs
+	print "make_program", name, lst
+	programs[name] = lst
+
+def do_run_program(lst, kv):
+	print "run_program", lst, kv
+
+	for linenr, line in lst:
+		if line[0] == "replace":
+			start = kv[line[1]].start
+			end = kv[line[1]].end
+			editor.erase(start, end)
+			editor.insert(start, line[2].format(**kv))
+		else:
+			raise ValueError("%d: unknown command %s" % (linenr, line[0]))
+
+def run_program(name, lst, match):
+	match.forgreedymax(name, lambda kv: do_run_program(lst, kv))
+
+def parse_line(line):
+	white = re.compile("\\s*")
+	nonwhite = re.compile("\\S*")
+
+	fields = []
+	pos = 0
+	while pos < len(line):
+		pos = white.match(line, pos).end()
+		if pos >= len(line):
+			break
+
+		if line[pos] == '"':
+			s = ""
+			pos += 1
+			while pos < len(line):
+				if line[pos] == '"':
+					pos += 1
+					break
+				for esc,to in [ ('\\n', '\n'), ('\\"', '\"'), ('\\t', '\t') ]:
+					if line.startswith(esc):
+						pos += len(esc)
+						s += to
+						break
+				else:
+					s += line[pos]
+					pos += 1
+			else:
+				raise ValueError("unmatched quotation mark")
+			fields.append(s)
+		else:
+			end = nonwhite.match(line, pos).end()
+			fields.append(line[pos:end])
+			pos = end
+
+	return fields
+
+def get_indent(line):
+	pos = 0
+	while pos < len(line) and line[pos] in [ ' ', '\t', '\n' ]:
+		pos += 1
+	if pos >= len(line) or line[pos] == '#':
+		return "", ""
+
+	return line[:pos], line[pos:].strip()
+
+def parse_script(fname):
+	global productions
+	global programs
+
+	filp = open(fname, 'r')
+	sub = None
+	lst = None
+	indents = None
+
+	linenr = 0
+	for line in filp:
+		linenr += 1
+
+		if sub != None:
+			indent, line = get_indent(line)
+			if not line:
+				continue
+
+			if indent:
+				if not indents:
+					indents = [indent]
+					lst = [[]]
+				else:
+					if len(indent) > len(indents[-1]):
+						if not indent.startswith(indents[-1]):
+							print >>sys.stderr, "%d: bad indentation" % (linenr)
+							exit(1)
+						indents.append(indent)
+						lst.append([])
+						lst[-2].append(lst[-1])
+					else:
+						while indents and len(indent) < len(indents[-1]):
+							indents.pop()
+							lst.pop()
+						if not indents or indent != indents[-1]:
+							print >>sys.stderr, "%d: bad indentation" % (linenr)
+
+				lst[-1].append((linenr, parse_line(line)))
+				continue
+
+			sub(lst[0])
+			lst = None
+			indents = None
+			continue
+
+		line = line.strip()
+		if not line or line[0] == '#':
+			continue
+
+		m = re.match("(\\w+) \s* = \s* (.*)", line, re.VERBOSE)
+		if m:
+			name = m.groups()[0]
+			expr = m.groups()[1]
+			print name, "=", expr
+			productions += pasr.compile.compile(name, expr, tokenizer, treeify)
+			continue
+
+		m = re.match("(\\w+):", line)
+		if m:
+			name = m.groups()[0]
+			if name in programs:
+				print >>sys.stderr, "%d: Multiply defined program for %s" % (linenr, name)
+				exit(1)
+
+			sub = lambda lst: make_program(name, lst)
+			continue
+
+		print >>sys.stderr, "%d: unknown command" % (linenr)
+
+	if sub != None:
+		sub(lst[0])
+
+## MAIN PROGRAM
+parse_script(args.script)
+
+if args.inputs:
+	for fname in args.inputs:
+		filp = open(fname, 'r')
+		text = filp.read()
+		filp.close()
+
+		tree = treeify.maketree(tokenizer.tokenize(text))
+		m = pasr.cyk.Match(tree, productions)
+		editor = pasr.text.Editor()
+		for name in programs:
+			run_program(name, programs[name], m)
+
+		print editor.inserts, editor.erases
+		print editor.apply(text)
+else:
+	print >>sys.stderr, "from sys.stdin"
+	text = sys.stdin.read()
+	tree = treeify.maketree(tokenizer.tokenize(text))
+	m = pasr.cyk.Match(tree, productions)
+	editor = pasr.text.Editor()
+	for name in programs:
+		run_program(name, programs[name], m)
+	print editor.apply(text)

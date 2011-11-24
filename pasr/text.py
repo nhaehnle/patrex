@@ -89,6 +89,9 @@ class Editor(object):
 	def apply(self, text):
 		self.inserts.sort(key=lambda x: x[0])
 		self.erases.sort(key=lambda x: x[0])
+
+		print self.inserts
+		print self.erases
 		gen = []
 		idxinsert = 0
 		idxerase = 0
@@ -99,14 +102,20 @@ class Editor(object):
 			while idxinsert < len(self.inserts) and self.inserts[idxinsert][0] < where:
 				idxinsert += 1
 
-			nexterase = idxerase < len(self.erases) and self.erases[idxerase][0]
-			nextinsert = idxinsert < len(self.inserts) and self.inserts[idxinsert][0]
+			nexterase = None
+			if idxerase < len(self.erases):
+				nexterase = self.erases[idxerase][0]
+			nextinsert = None
+			if idxinsert < len(self.inserts):
+				nextinsert = self.inserts[idxinsert][0]
 
-			if not (nextinsert or nexterase):
+			print nexterase, nextinsert
+
+			if nextinsert == None and nexterase == None:
 				gen.append(text[where:])
 				break
 
-			if nexterase and (not nextinsert or nexterase < nextinsert):
+			if nexterase != None and (nextinsert == None or nexterase < nextinsert):
 				gen.append(text[where:nexterase])
 				where = self.erases[idxerase][1]
 				idxerase += 1
@@ -116,6 +125,8 @@ class Editor(object):
 				where = ins[0]
 				gen.append(ins[1])
 				idxinsert += 1
+
+		print gen
 
 		return ''.join(gen)
 

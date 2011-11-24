@@ -2,3 +2,4 @@ boost::bind(&foo, boost::ref(*this));
 boost::bind(&foo, a, boost::ref(*this));
 boost::bind(&A::foo, boost::ref(*this));
 boost::bind(&A::foo, a, boost::ref(*this));
+boost::bind(decoy, &A::foo, boost::ref(*this));

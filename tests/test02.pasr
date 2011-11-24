@@ -1,0 +1,7 @@
+
+# This is a comment
+
+r = $(( boost::$(id)|name| ))|ref|
+
+r:
+	replace ref "{name}"
