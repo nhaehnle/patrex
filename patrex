@@ -110,6 +110,10 @@ def do_run_program(lst, kv):
 				callkv = kv.copy()
 				callkv.update(subkv)
 				do_run_program(lst[idx], callkv)
+		elif line[0] == "if":
+			idx += 1
+			if line[1] in kv:
+				do_run_program(lst[idx], kv)
 		else:
 			raise ValueError("%d: unknown command %s" % (linenr, line[0]))
 		idx += 1

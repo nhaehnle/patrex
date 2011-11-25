@@ -121,9 +121,12 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 		elif text[pos] == '|':
 			pos += 1
 			endstate = nfa.newstate()
+			prio = 0
 			while pos < len(text) and text[pos] in [ '{', '(' ]:
 				subend, pos = do_subexpr(nfa, startstate, text, pos, options)
-				nfa.transition(subend, endstate, match=None)
+				t = nfa.transition(subend, endstate, match=None)
+				t.priority = prio
+				prio += 1
 		else:
 			raise TextError(text, pos, "unknown escape character '%s'" % (text[pos]))
 

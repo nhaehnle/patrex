@@ -132,6 +132,7 @@ class Nfa(object):
 			self.start = start
 			self.end = end
 			self.match = match
+			self.priority = None
 			self.callback = None
 			self.prevcapture = None
 			self.nextcapture = None
@@ -185,9 +186,14 @@ class Nfa(object):
 
 		queue = states.items()
 		while queue:
-			state,stack = queue.pop()
+			state,data = queue.pop()
+			prio,stack = data
+
 			for transition in self.states[state].epsilons:
-				if transition.end in states:
+				newprio = prio
+				if transition.priority != None:
+					newprio = transition.priority
+				if transition.end in states and states[transition.end][0] >= newprio:
 					continue
 
 				if transition.prevcapture or transition.nextcapture:
@@ -212,8 +218,9 @@ class Nfa(object):
 						newstack.append({})
 				else:
 					newstack = stack
-				states[transition.end] = newstack
-				queue.append((transition.end, newstack))
+
+				states[transition.end] = (newprio, newstack)
+				queue.append((transition.end, (newprio, newstack)))
 
 				if transition.callback:
 					transition.callback(newstack[-1])
@@ -230,7 +237,7 @@ class Nfa(object):
 
 		beforetoken and aftertoken are used for the purpose of position matching ($<|pos| and $>|pos| patterns).
 		"""
-		states = { startstate: [{}] }
+		states = { startstate: (None, [{}]) }
 		self.expand_epsilons(states, beforetoken, compute_next(beforetoken, tree, 0, aftertoken))
 
 		for idx in range(len(tree)):
@@ -242,12 +249,18 @@ class Nfa(object):
 					return None
 				return {}
 			if goalstate and goalstate in states:
-				return states[goalstate][-1]
+				return states[goalstate][1][-1]
 
 			newstates = {}
-			for state,stack in states.iteritems():
+			for state,data in states.iteritems():
+				prio,stack = data
+
 				for transition in self.states[state].transitions:
-					if transition.end in newstates:
+					newprio = prio
+					if transition.priority != None:
+						newprio = transition.priority
+
+					if transition.end in newstates and newstates[transition.end][1] >= newprio:
 						continue
 
 					matchkv = transition.match(beforetoken, tree, idx, aftertoken)
@@ -260,7 +273,8 @@ class Nfa(object):
 						newstack[-1].update(matchkv)
 					else:
 						newstack = stack
-					newstates[transition.end] = newstack
+					newstates[transition.end] = (newprio, newstack)
+
 			states = newstates
 			self.expand_epsilons(
 				states,
@@ -273,9 +287,9 @@ class Nfa(object):
 				return states[goalstate][-1]
 			else:
 				return None
-		return dict((state,stack[-1]) for state,stack in states.iteritems())
+		return dict((state,data[1][-1]) for state,data in states.iteritems())
 
-	def write(self):
+	def write(self, indent=0):
 		"""
 		Output the states and transitions (for debugging)
 		"""
@@ -283,22 +297,22 @@ class Nfa(object):
 			return
 		self.writing = True
 		for state in range(len(self.states)):
-			print "%3d:" % (state),
+			print ' '*indent + "%3d:" % (state),
 			first = True
 			for transition in self.states[state].transitions:
 				if first:
 					first = False
 				else:
-					print "    ",
+					print ' '*indent + "    ",
 				print "->", transition.end, transition.match
 				if hasattr(transition.match, "write"):
-					transition.match.write()
+					transition.match.write(indent + 6)
 
 			for transition in self.states[state].epsilons:
 				if first:
 					first = False
 				else:
-					print "    ",
+					print ' '*indent + "    ",
 				print "->", transition.end, "<eps>",
 				if transition.callback:
 					print "callback", transition.callback,

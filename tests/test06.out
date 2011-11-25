@@ -1,0 +1,26 @@
+Foo::Foo
+	(A & a, B & b, bool c)
+	:
+	NS::Base(a, b),
+	m_toggle_chat
+		(INIT_BTN("menu_chat", "chat", _("Chat"))),
+	m_exit
+		(INIT_BTN("menu_exit_game", "exit_replay", _("Exit Replay"))),
+	m_save
+		(INIT_BTN("menu_save_game", "save_game", _("Save Game"))),
+	m_toggle_options_menu
+		(INIT_BTN("menu_options_menu", "options_menu", _("Options"))),
+	m_toggle_statistics
+		(INIT_BTN("menu_general_stats", "general_stats", _("Statistics"))),
+	m_toggle_minimap
+		(INIT_BTN("menu_toggle_minimap", "minimap", _("Minimap")))
+{
+	m_toggle_chat.sigclicked.connect(boost::bind(&Foo::toggle_chat, this));
+	m_exit.sigclicked.connect(boost::bind(&Foo::exit_btn, this));
+	m_save.sigclicked.connect(boost::bind(&Foo::save_btn, this));
+	m_toggle_options_menu.sigclicked.connect(boost::bind(&Foo::toggle_options_menu, this));
+	m_toggle_statistics.sigclicked.connect(boost::bind(&Foo::toggle_statistics, this));
+	m_toggle_minimap.sigclicked.connect(boost::bind(&Foo::toggle_minimap, this));
+
+	initializations();
+}

@@ -1,0 +1,10 @@
+
+define init ${id}|field| ( INIT_BTN( $.*, $.* $(, ${id}|slot| )|arg| , $.* ) )
+define arg $|( $!(,)* ){init}
+
+match : ${arg}+(,)[inits] { $<|block| $.* }
+	forall inits
+		if field
+			insert block "\n\t{field}.sigclicked.connect(boost::bind(&Foo::{slot}, this));"
+			erase arg
+	insert block "\n"

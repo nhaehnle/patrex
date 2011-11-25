@@ -1,0 +1,22 @@
+Foo::Foo
+	(A & a, B & b, bool c)
+	:
+	NS::Base(a, b),
+	m_toggle_chat
+		(INIT_BTN("menu_chat", "chat", toggle_chat, _("Chat"))),
+	m_exit
+		(INIT_BTN("menu_exit_game", "exit_replay", exit_btn, _("Exit Replay"))),
+	m_save
+		(INIT_BTN("menu_save_game", "save_game", save_btn, _("Save Game"))),
+	m_toggle_options_menu
+		(INIT_BTN("menu_options_menu", "options_menu",
+					 toggle_options_menu, _("Options"))),
+	m_toggle_statistics
+		(INIT_BTN("menu_general_stats", "general_stats",
+					 toggle_statistics, _("Statistics"))),
+	m_toggle_minimap
+		(INIT_BTN("menu_toggle_minimap", "minimap",
+					 toggle_minimap, _("Minimap")))
+{
+	initializations();
+}
