@@ -39,6 +39,7 @@ class Options(object):
 		self.escape = '$'
 		self.tokenizer = tokenizer
 		self.treeify = treeify
+		self.tags = {}
 
 def readuntil(text, pos, delim):
 	end = text.find(delim, pos)
@@ -56,8 +57,19 @@ def do_subexpr(nfa, startstate, text, pos, options):
 		# Matching a tagged token
 		tag, pos = readuntil(text, pos+1, '}')
 
-		endstate = nfa.newstate()
-		nfa.transition(startstate, endstate, nfa_tag(tag))
+		if tag in options.tags:
+			subnfa, substart, subend = options.tags[tag]
+			assert nfa != subnfa
+
+			statemap = nfa.insert(subnfa)
+			substart = statemap[substart]
+			subend = statemap[subend]
+
+			nfa.transition(startstate, substart, match=None)
+			endstate = subend
+		else:
+			endstate = nfa.newstate()
+			nfa.transition(startstate, endstate, nfa_tag(tag))
 	elif text[pos] == '(':
 		# Matching a group
 		tree, pos = do_compile_maketree(nfa, text, pos+1, ")", options)
@@ -106,6 +118,12 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			endstate = nfa.newstate()
 			nfa.transition(startstate, endstate, nfa_any())
 			pos += 1
+		elif text[pos] == '|':
+			pos += 1
+			endstate = nfa.newstate()
+			while pos < len(text) and text[pos] in [ '{', '(' ]:
+				subend, pos = do_subexpr(nfa, startstate, text, pos, options)
+				nfa.transition(subend, endstate, match=None)
 		else:
 			raise TextError(text, pos, "unknown escape character '%s'" % (text[pos]))
 
@@ -118,12 +136,12 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			startstate = newstart
 			endstate = newend
 
-		if text[pos] in [ '*', '+' ]:
+		if pos < len(text) and text[pos] in [ '*', '+' ]:
 			# Star operations
 			star = text[pos] == '*'
 			pos += 1
 
-			if text[pos] in [ '{', '(' ]:
+			if pos < len(text) and text[pos] in [ '{', '(' ]:
 				# Support separator expressions
 				sepend, pos = do_subexpr(nfa, endstate, text, pos, options)
 				repeattransition = nfa.transition(sepend, startstate, match=None)
@@ -133,7 +151,7 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			if star:
 				nfa.transition(startstate, endstate, match=None)
 
-			if text[pos] == '[':
+			if pos < len(text) and text[pos] == '[':
 				# Capture into a list
 				key, pos = readuntil(text, pos+1, ']')
 
@@ -147,7 +165,7 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 				startstate = newstart
 				endstate = newend
 
-		if text[pos] == '|':
+		if pos < len(text) and text[pos] == '|':
 			# Capturing text range of a match
 			key, pos = readuntil(text, pos+1, '|')
 

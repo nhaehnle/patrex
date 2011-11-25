@@ -1,0 +1,5 @@
+define arg $!(,)*
+
+match $( ${id} $|( . )( -> ) )|var| foo ( ${arg}, ${arg}|second|, ${arg}|third|, ${arg} ); $<|pos|
+	erase second.end third.end
+	insert pos "\n\t{var}bar({third});"

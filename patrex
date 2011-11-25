@@ -226,14 +226,28 @@ def parse_script(fname):
 		if not line or line[0] == '#':
 			continue
 
-		m = re.match("match \\s+ (.*)", line, re.VERBOSE)
+		m = re.match("match \\s+ (.+)", line, re.VERBOSE)
 		if m:
 			expr = m.groups()[0]
 			startstate, endstate = patre.compile.compile(nfa, expr, options)
 			sub = lambda lst: make_program(startstate, endstate, lst)
 			continue
 
+		m = re.match("define \\s+ (\\w+) \\s+ (.+)", line, re.VERBOSE)
+		if m:
+			tag = m.groups()[0]
+			expr = m.groups()[1]
+			if tag in options.tags:
+				print >>sys.stderr, "%d: multiply defined '%s'" % (linenr, tag)
+				exit(1)
+
+			subnfa = patre.nfa.Nfa()
+			startstate, endstate = patre.compile.compile(subnfa, expr, options)
+			options.tags[tag] = (subnfa, startstate, endstate)
+			continue
+
 		print >>sys.stderr, "%d: unknown command" % (linenr)
+		exit(1)
 
 	if sub != None:
 		sub(lst[0])

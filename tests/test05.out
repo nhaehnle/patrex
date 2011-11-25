@@ -1,0 +1,6 @@
+{
+	a.foo(get(1, x), "hi", 0);
+	a.bar(tmp);
+	b->foo(y, "bar", 0);
+	b->bar(tmp);
+}
