@@ -1,0 +1,3 @@
+
+match boost::bind(& ${id} $( :: ${id} )+, $( boost::ref(*this) )|ref| $* )
+	replace ref "this"

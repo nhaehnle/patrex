@@ -30,33 +30,41 @@ import argparse
 import re
 import sys
 
-import pasr
-import pasr.compile
-import pasr.cpp
-import pasr.text
+import patre
+import patre.compile
+import patre.cpp
+import patre.nfa
+import patre.text
 
 ## GLOBAL VARIABLES AND ARGUMENTS
-productions = []
-programs = {}
-tokenizer = pasr.cpp.tokenizer
-treeify = pasr.cpp.treeify
 editor = None
+currentfiletext = None
+nfa = patre.nfa.Nfa()
+options = patre.compile.Options(patre.cpp.tokenizer, patre.cpp.treeify)
+
+globalstart = nfa.newstate()
+nfa.transition(globalstart, globalstart, match=patre.nfa.nfa_list(nfa, 0, -1))
+nfa.transition(globalstart, globalstart, match=patre.nfa.nfa_any())
 
 parser = argparse.ArgumentParser(description='Parenthesis-aware context-free grammar based file processing.')
 parser.add_argument('script', metavar='script', type=str, help='CFG definition and command script')
 parser.add_argument('inputs', metavar='FILE', type=str, nargs='*', help='input file(s); if not set, read from STDIN')
+parser.add_argument('--debug', '-d', action='store_true', help='print debugging output')
 
 args = parser.parse_args()
 
 ## SUBROUTINES
 
-def make_program(name, lst):
-	global programs
-	print "make_program", name, lst
-	programs[name] = lst
+def make_program(startstate, endstate, lst):
+	nfa.transition(globalstart, startstate, match=None)
+
+	execstate = nfa.newstate()
+	t = nfa.transition(endstate, execstate, match=None)
+	t.callback = lambda kv: run_program(lst, kv)
 
 def do_run_program(lst, kv):
-	print "run_program", lst, kv
+	if args.debug:
+		print "run_program", lst, kv
 
 	for linenr, line in lst:
 		if line[0] == "replace":
@@ -67,8 +75,14 @@ def do_run_program(lst, kv):
 		else:
 			raise ValueError("%d: unknown command %s" % (linenr, line[0]))
 
-def run_program(name, lst, match):
-	match.forgreedymax(name, lambda kv: do_run_program(lst, kv))
+def translate_dictionary(kv):
+	newkv = {}
+	for name in set([name for name,id in kv.keys()]):
+		newkv[name] = patre.text.TextRange(currentfiletext, kv[(name,0)], kv[(name,1)])
+	return newkv
+
+def run_program(lst, kv):
+	do_run_program(lst, translate_dictionary(kv))
 
 def parse_line(line):
 	white = re.compile("\\s*")
@@ -164,22 +178,11 @@ def parse_script(fname):
 		if not line or line[0] == '#':
 			continue
 
-		m = re.match("(\\w+) \s* = \s* (.*)", line, re.VERBOSE)
+		m = re.match("match \\s+ (.*)", line, re.VERBOSE)
 		if m:
-			name = m.groups()[0]
-			expr = m.groups()[1]
-			print name, "=", expr
-			productions += pasr.compile.compile(name, expr, tokenizer, treeify)
-			continue
-
-		m = re.match("(\\w+):", line)
-		if m:
-			name = m.groups()[0]
-			if name in programs:
-				print >>sys.stderr, "%d: Multiply defined program for %s" % (linenr, name)
-				exit(1)
-
-			sub = lambda lst: make_program(name, lst)
+			expr = m.groups()[0]
+			startstate, endstate = patre.compile.compile(nfa, expr, options)
+			sub = lambda lst: make_program(startstate, endstate, lst)
 			continue
 
 		print >>sys.stderr, "%d: unknown command" % (linenr)
@@ -190,26 +193,30 @@ def parse_script(fname):
 ## MAIN PROGRAM
 parse_script(args.script)
 
+if args.debug:
+	nfa.write()
+	nfa.debug = True
+
 if args.inputs:
 	for fname in args.inputs:
 		filp = open(fname, 'r')
-		text = filp.read()
+		currentfiletext = filp.read()
 		filp.close()
 
-		tree = treeify.maketree(tokenizer.tokenize(text))
-		m = pasr.cyk.Match(tree, productions)
-		editor = pasr.text.Editor()
-		for name in programs:
-			run_program(name, programs[name], m)
+		editor = patre.text.Editor()
 
-		print editor.inserts, editor.erases
-		print editor.apply(text)
+		tree = options.treeify.maketree(options.tokenizer(currentfiletext)())
+		nfa(tree, globalstart)
+
+		print editor.apply(currentfiletext),
 else:
 	print >>sys.stderr, "from sys.stdin"
-	text = sys.stdin.read()
-	tree = treeify.maketree(tokenizer.tokenize(text))
-	m = pasr.cyk.Match(tree, productions)
-	editor = pasr.text.Editor()
-	for name in programs:
-		run_program(name, programs[name], m)
-	print editor.apply(text)
+	currentfiletext = sys.stdin.read()
+	tree = treeify.maketree(tokenizer.tokenize(currentfiletext))
+
+	editor = patre.text.Editor()
+
+	tree = options.treeify.maketree(options.tokenizer(currentfiletext)())
+	nfa(tree, globalstart)
+
+	print editor.apply(currentfiletext),

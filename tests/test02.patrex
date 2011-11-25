@@ -1,7 +1,5 @@
 
 # This is a comment
 
-r = $(( boost::$(id)|name| ))|ref|
-
-r:
+match $( boost::${id}|name| )|ref|
 	replace ref "{name}"

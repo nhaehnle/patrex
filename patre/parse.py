@@ -88,29 +88,34 @@ class Tokenizer(object):
 		self.fns.append((stage, fn))
 		self.fns.sort(key=lambda x: x[0])
 
-	def tokenize(self, text, override=None):
-		"""
-		Tokenize a text
-		"""
-		pos = 0
-		while pos < len(text):
-			if override != None:
-				out, end = override(text, pos)
-				if end != None:
-					if out != None:
-						yield out
-					pos = end
-					continue
+	def __call__(self, text, pos=0, override=None):
+		class Instance(object):
+			def __init__(self, tok, text, pos, override):
+				self.tok = tok
+				self.text = text
+				self.pos = pos
+				self.override = override
 
-			for stage, fn in self.fns:
-				out, end = fn(text, pos)
-				if end != None:
-					if out != None:
-						yield out
-					pos = end
-					break
-			else:
-				raise TextError(text, pos, "failed to tokenize")
+			def __call__(self):
+				while self.pos < len(self.text):
+					if override != None:
+						out, end = override(self.text, self.pos)
+						if end != None:
+							self.pos = end
+							if out != None:
+								yield out
+							continue
+
+					for stage, fn in self.tok.fns:
+						out, end = fn(self.text, self.pos)
+						if end != None:
+							self.pos = end
+							if out != None:
+								yield out
+							break
+					else:
+						raise TextError(text, pos, "failed to tokenize")
+		return Instance(self, text, pos, override)
 
 class Treeify(object):
 	"""
@@ -122,9 +127,9 @@ class Treeify(object):
 	def addparens(self, open, close):
 		self.parens.append((open, close))
 
-	def maketree(self, tokens):
+	def maketree(self, tokens, close=None):
 		liststack = [[]]
-		closestack = [None]
+		closestack = [close]
 
 		for tok in tokens:
 			s = str(tok)
@@ -138,6 +143,9 @@ class Treeify(object):
 				elif s == close:
 					if closestack[-1] != s:
 						raise TextError(tok.text, tok.start, "unexpected closing '%s'" % (s))
+
+					if len(liststack) == 1:
+						return liststack[0]
 
 					liststack[-2].append(liststack[-1])
 					liststack.pop()
