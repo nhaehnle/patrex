@@ -1,0 +1,4 @@
+
+match ${id}|varname| ->setup( $.* $<|prevarg| , $!(,)*|arg|, $!(,)*, $!(,)* ); $<|pos|
+	erase prevarg arg.end
+	insert pos "\n\t{varname}->set({arg});"

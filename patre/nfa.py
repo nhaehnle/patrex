@@ -27,13 +27,41 @@ Non-deterministic finite automaton (NFA) for tokenized trees.
 
 from text import TextRange
 
+def compute_prev(before, block, idx, after):
+	"""
+	Get the token just before the gap before block[idx] (inspecting inside lists)
+	"""
+	if idx == 0:
+		return before
+	else:
+		prev = block[idx-1]
+		if type(prev) == list:
+			if not prev:
+				return compute_prev(before, block, idx-1, after)
+			return prev[-1]
+		return prev
+
+def compute_next(before, block, idx, after):
+	"""
+	Get the token just after the gap before block[idx] (inspecting inside lists)
+	"""
+	if idx == len(block):
+		return after
+	else:
+		next = block[idx]
+		if type(next) == list:
+			if not next:
+				return compute_next(before, block, idx+1, after)
+			return next[0]
+		return next
+
 def nfa_token(token):
 	"""
 	Return a transition matching function that matches exactly the given token.
 	"""
 	assert isinstance(token, (str, TextRange))
-	def inner(prev, cur, next):
-		if isinstance(cur, TextRange) and str(cur) == str(token):
+	def inner(before, block, idx, after):
+		if isinstance(block[idx], TextRange) and str(block[idx]) == str(token):
 			return {}
 		return None
 	inner.func_name = "token(%s)" % (token)
@@ -43,8 +71,8 @@ def nfa_tag(tag):
 	"""
 	Return a transition matching function that matches a token if it has the given tag.
 	"""
-	def inner(prev, cur, next):
-		if hasattr(cur, "tag") and cur.tag == tag:
+	def inner(before, block, idx, after):
+		if hasattr(block[idx], "tag") and block[idx].tag == tag:
 			return {}
 		return None
 	inner.func_name = "tag(%s)" % (tag)
@@ -55,9 +83,11 @@ def nfa_list(nfa, startstate, endstate):
 	Return a transition matching function that matches a tree which matches
 	the given NFA, starting at startstate and ending at endstate
 	"""
-	def inner(prev, cur, next):
-		if type(cur) == list:
-			endstates = nfa(cur, startstate, prev, next)
+	def inner(before, block, idx, after):
+		if type(block[idx]) == list:
+			subbefore = compute_prev(before, block, idx, after)
+			subafter = compute_next(before, block, idx+1, after)
+			endstates = nfa(block[idx], startstate, subbefore, subafter)
 			if endstate in endstates:
 				return endstates[endstate]
 		return None
@@ -69,9 +99,22 @@ def nfa_any():
 	"""
 	Return a transition matching function that matches any token
 	"""
-	def inner(prev, cur, next):
+	def inner(before, block, idx, after):
 		return {}
 	inner.func_name = "any"
+	return inner
+
+def nfa_not(nfa, startstate, endstate):
+	"""
+	Return a transition matching function that matches any token,
+	as long as the prefix of the remaining tree never reaches endstate starting at startstate.
+	"""
+	def inner(before, block, idx, after):
+		kv = nfa(block[idx:], startstate, compute_prev(before, block, idx, after), after, endstate)
+		if kv == None:
+			return {}
+		return None
+	inner.func_name = "not(%d, %d)" % (startstate, endstate)
 	return inner
 
 class Nfa(object):
@@ -156,26 +199,31 @@ class Nfa(object):
 				if transition.callback:
 					transition.callback(newkv)
 
-	def __call__(self, tree, startstate, beforetoken=None, aftertoken=None):
+	def __call__(self, tree, startstate, beforetoken=None, aftertoken=None, goalstate=None):
+		"""
+		Run the NFA on the given tree from the given startstate.
+
+		If no goalstate is given: Returns a dictionary of states to key-value dicts, containing all the states that
+		can be reached by matching the tree until its very end.
+
+		If a goalstate is given, only return the key-value dict for that goalstate, the first time the goalstate
+		is reached by the NFA. If the goalstate is never reached, return None.
+
+		beforetoken and aftertoken are used for the purpose of position matching ($<|pos| and $>|pos| patterns).
+		"""
 		states = { startstate: {} }
-
-		if not tree:
-			self.expand_epsilons(state, beforetoken, aftertoken)
-			return states
-
-		token = beforetoken
-		nexttoken = tree[0]
+		self.expand_epsilons(states, beforetoken, compute_next(beforetoken, tree, 0, aftertoken))
 
 		for idx in range(len(tree)):
-			prevtoken, token = token, nexttoken
-			if idx+1 == len(tree):
-				nexttoken = aftertoken
-			else:
-				nexttoken = tree[idx+1]
-
-			self.expand_epsilons(states, prevtoken, token)
 			if self.debug:
-				print "%d = %s" % (idx, token), states.keys()
+				print "%d = %s" % (idx, tree[idx]), states.keys()
+
+			if not states:
+				if goalstate:
+					return None
+				return {}
+			if goalstate and goalstate in states:
+				return states[goalstate]
 
 			newstates = {}
 			for state,kv in states.iteritems():
@@ -183,7 +231,7 @@ class Nfa(object):
 					if transition.end in newstates:
 						continue
 
-					matchkv = transition.match(prevtoken, token, nexttoken)
+					matchkv = transition.match(beforetoken, tree, idx, aftertoken)
 					if matchkv == None:
 						continue
 
@@ -194,8 +242,17 @@ class Nfa(object):
 						newkv = kv
 					newstates[transition.end] = newkv
 			states = newstates
+			self.expand_epsilons(
+				states,
+				compute_prev(beforetoken, tree, idx+1, aftertoken),
+				compute_next(beforetoken, tree, idx+1, aftertoken)
+			)
 
-		self.expand_epsilons(states, token, nexttoken)
+		if goalstate:
+			if goalstate in states:
+				return states[goalstate]
+			else:
+				return None
 		return states
 
 	def write(self):

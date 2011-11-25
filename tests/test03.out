@@ -1,0 +1,4 @@
+{
+	obj->setup(a.foo, b, c, d, e, g.test(1, 2), h);
+	obj->set(f.bar());
+}

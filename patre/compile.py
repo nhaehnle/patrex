@@ -28,7 +28,7 @@ concise language into non-deterministic finite automata (NFA).
 
 import re
 
-from nfa import Nfa, nfa_token, nfa_tag, nfa_list, nfa_any
+from nfa import Nfa, nfa_token, nfa_tag, nfa_list, nfa_any, nfa_not
 from text import TextError, TextRange
 
 class Options(object):
@@ -77,6 +77,11 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 
 			return (startstate, endstate), pos
 
+		negate = False
+		if text[pos] == '!':
+			negate = True
+			pos += 1
+
 		if text[pos] == '{':
 			# Matching a tagged token
 			tag, pos = readuntil(text, pos+1, '}')
@@ -96,6 +101,15 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			pos += 1
 		else:
 			raise TextError(text, pos, "unknown escape character '%s'" % (text[pos]))
+
+		if negate:
+			# Match any token, so long as the prefix does not match what we described
+			newstart = nfa.newstate()
+			newend = nfa.newstate()
+			nfa.transition(newstart, newend, match=nfa_not(nfa, startstate, endstate))
+
+			startstate = newstart
+			endstate = newend
 
 		if text[pos] in [ '*', '+' ]:
 			# Star operations
