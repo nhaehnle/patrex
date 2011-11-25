@@ -47,6 +47,23 @@ def readuntil(text, pos, delim):
 	out = text[pos:end]
 	return out, end+len(delim)
 
+def do_subexpr(nfa, startstate, text, pos, options):
+	"""
+	Handle an escape {...} or (...) sub-expression.
+	Returns endstate and new position in text
+	"""
+	if text[pos] == '{':
+		# Matching a tagged token
+		tag, pos = readuntil(text, pos+1, '}')
+
+		endstate = nfa.newstate()
+		nfa.transition(startstate, endstate, nfa_tag(tag))
+	elif text[pos] == '(':
+		# Matching a group
+		tree, pos = do_compile_maketree(nfa, text, pos+1, ")", options)
+		endstate = do_compile_transitions(nfa, startstate, tree, options)
+	return endstate, pos
+
 def do_compile_maketree(nfa, expr, pos, close, options):
 	escaped = [False]
 	def escape(text, pos):
@@ -82,18 +99,8 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			negate = True
 			pos += 1
 
-		if text[pos] == '{':
-			# Matching a tagged token
-			tag, pos = readuntil(text, pos+1, '}')
-
-			endstate = nfa.newstate()
-			nfa.transition(startstate, endstate, nfa_tag(tag))
-		elif text[pos] == '(':
-			# Matching a group
-			pos += 1
-			tree, end = do_compile_maketree(nfa, text, pos, ")", options)
-			endstate = do_compile_transitions(nfa, startstate, tree, options)
-			pos = end
+		if text[pos] in [ '{', '(' ]:
+			endstate, pos = do_subexpr(nfa, startstate, text, pos, options)
 		elif text[pos] == '.':
 			# Match anything
 			endstate = nfa.newstate()
@@ -103,7 +110,7 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			raise TextError(text, pos, "unknown escape character '%s'" % (text[pos]))
 
 		if negate:
-			# Match any token, so long as the prefix does not match what we described
+			# Match any token, so long as the prefix does not match what we described previously
 			newstart = nfa.newstate()
 			newend = nfa.newstate()
 			nfa.transition(newstart, newend, match=nfa_not(nfa, startstate, endstate))
@@ -116,22 +123,42 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			star = text[pos] == '*'
 			pos += 1
 
-			nfa.transition(endstate, startstate, match=None)
+			if text[pos] in [ '{', '(' ]:
+				# Support separator expressions
+				sepend, pos = do_subexpr(nfa, endstate, text, pos, options)
+				repeattransition = nfa.transition(sepend, startstate, match=None)
+			else:
+				repeattransition = nfa.transition(endstate, startstate, match=None)
+
 			if star:
 				nfa.transition(startstate, endstate, match=None)
 
+			if text[pos] == '[':
+				# Capture into a list
+				key, pos = readuntil(text, pos+1, ']')
+
+				newstart = nfa.newstate()
+				newend = nfa.newstate()
+				push = nfa.transition(newstart, startstate, match=None)
+				push.stack = (Nfa.PUSH, key)
+				pop = nfa.transition(endstate, newend, match=None)
+				pop.stack = (Nfa.POP, key)
+				repeattransition.stack = (Nfa.STORE, key)
+				startstate = newstart
+				endstate = newend
+
 		if text[pos] == '|':
 			# Capturing text range of a match
-			tag, pos = readuntil(text, pos+1, '|')
+			key, pos = readuntil(text, pos+1, '|')
 
 			newstart = nfa.newstate()
 			t = nfa.transition(newstart, startstate, match=None)
-			t.nextcapture = (tag, 0)
+			t.nextcapture = (key, 0)
 			startstate = newstart
 
 			newend = nfa.newstate()
 			t = nfa.transition(endstate, newend, match=None)
-			t.prevcapture = (tag, 1)
+			t.prevcapture = (key, 1)
 			endstate = newend
 
 		return (startstate, endstate), pos

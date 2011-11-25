@@ -123,6 +123,10 @@ class Nfa(object):
 			self.transitions = []
 			self.epsilons = []
 
+	PUSH = 0
+	POP = 1
+	STORE = 2
+
 	class Transition(object):
 		def __init__(self, start, end, match):
 			self.start = start
@@ -131,6 +135,7 @@ class Nfa(object):
 			self.callback = None
 			self.prevcapture = None
 			self.nextcapture = None
+			self.stack = None
 
 	def __init__(self):
 		self.states = []
@@ -180,24 +185,38 @@ class Nfa(object):
 
 		queue = states.items()
 		while queue:
-			state,kv = queue.pop()
+			state,stack = queue.pop()
 			for transition in self.states[state].epsilons:
 				if transition.end in states:
 					continue
 
 				if transition.prevcapture or transition.nextcapture:
-					newkv = kv.copy()
+					newstack = stack[:]
+					newstack[-1] = newstack[-1].copy()
 					if transition.prevcapture and prev:
-						newkv[transition.prevcapture] = prev.end
+						newstack[-1][transition.prevcapture] = prev.end
 					if transition.nextcapture and next:
-						newkv[transition.nextcapture] = next.start
+						newstack[-1][transition.nextcapture] = next.start
+				elif transition.stack != None:
+					newstack = stack[:]
+
+					op,key = transition.stack
+					if op == Nfa.POP or op == Nfa.STORE:
+						newstack[-2] = newstack[-2].copy()
+						newstack[-2][key] = newstack[-2][key][:]
+						newstack[-2][key].append(newstack.pop())
+					if op == Nfa.PUSH:
+						newstack[-1] = newstack[-1].copy()
+						newstack[-1][key] = []
+					if op == Nfa.PUSH or op == Nfa.STORE:
+						newstack.append({})
 				else:
-					newkv = kv
-				states[transition.end] = newkv
-				queue.append((transition.end, newkv))
+					newstack = stack
+				states[transition.end] = newstack
+				queue.append((transition.end, newstack))
 
 				if transition.callback:
-					transition.callback(newkv)
+					transition.callback(newstack[-1])
 
 	def __call__(self, tree, startstate, beforetoken=None, aftertoken=None, goalstate=None):
 		"""
@@ -211,7 +230,7 @@ class Nfa(object):
 
 		beforetoken and aftertoken are used for the purpose of position matching ($<|pos| and $>|pos| patterns).
 		"""
-		states = { startstate: {} }
+		states = { startstate: [{}] }
 		self.expand_epsilons(states, beforetoken, compute_next(beforetoken, tree, 0, aftertoken))
 
 		for idx in range(len(tree)):
@@ -223,10 +242,10 @@ class Nfa(object):
 					return None
 				return {}
 			if goalstate and goalstate in states:
-				return states[goalstate]
+				return states[goalstate][-1]
 
 			newstates = {}
-			for state,kv in states.iteritems():
+			for state,stack in states.iteritems():
 				for transition in self.states[state].transitions:
 					if transition.end in newstates:
 						continue
@@ -236,11 +255,12 @@ class Nfa(object):
 						continue
 
 					if matchkv:
-						newkv = kv.copy()
-						newkv.update(matchkv)
+						newstack = stack[:]
+						newstack[-1] = newstack[-1].copy()
+						newstack[-1].update(matchkv)
 					else:
-						newkv = kv
-					newstates[transition.end] = newkv
+						newstack = stack
+					newstates[transition.end] = newstack
 			states = newstates
 			self.expand_epsilons(
 				states,
@@ -250,10 +270,10 @@ class Nfa(object):
 
 		if goalstate:
 			if goalstate in states:
-				return states[goalstate]
+				return states[goalstate][-1]
 			else:
 				return None
-		return states
+		return dict((state,stack[-1]) for state,stack in states.iteritems())
 
 	def write(self):
 		"""
@@ -286,6 +306,8 @@ class Nfa(object):
 					print "prevcapture", transition.prevcapture,
 				if transition.nextcapture:
 					print "nextcapture", transition.nextcapture,
+				if transition.stack:
+					print "stack", transition.stack,
 				print
 			if first:
 				print

@@ -85,7 +85,10 @@ def do_run_program(lst, kv):
 	if args.debug:
 		print "run_program", lst, kv
 
-	for linenr, line in lst:
+	idx = 0
+	while idx < len(lst):
+		linenr, line = lst[idx]
+
 		if line[0] == "replace":
 			if len(line) == 4:
 				start,end = prog_get_start_end(kv, line[1:3])
@@ -101,8 +104,15 @@ def do_run_program(lst, kv):
 		elif line[0] == "insert":
 			pos = prog_get_pos(kv, line[1])
 			editor.insert(pos, line[2].format(**kv))
+		elif line[0] == "forall":
+			idx += 1
+			for subkv in kv[line[1]]:
+				callkv = kv.copy()
+				callkv.update(subkv)
+				do_run_program(lst[idx], callkv)
 		else:
 			raise ValueError("%d: unknown command %s" % (linenr, line[0]))
+		idx += 1
 
 def translate_dictionary(kv):
 	newkv = {}
@@ -112,7 +122,11 @@ def translate_dictionary(kv):
 			if not name in newkv:
 				newkv[name] = patre.text.TextRange(currentfiletext, kv[(name,0)], kv[(name,1)])
 		else:
-			newkv[key] = kv[key]
+			value = kv[key]
+			if type(value) == list:
+				newkv[key] = [translate_dictionary(d) for d in value]
+			else:
+				newkv[key] = value
 	return newkv
 
 def run_program(lst, kv):

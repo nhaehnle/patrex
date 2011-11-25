@@ -1,0 +1,7 @@
+do(obj, a);
+do(obj, 78 + 7);
+do(obj, "Hi there");
+do(obj, (4 + x) / 2);
+do(obj, foo(x, y));
+do(obj, bar->hi);
+

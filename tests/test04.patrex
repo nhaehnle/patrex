@@ -1,0 +1,5 @@
+
+match $( dolist( $!(,)*|obj|, $( $!(,)*|param| )+(,)[params] ); )|call|
+	erase call
+	forall params
+		insert call.start "do({obj}, {param});\n"
