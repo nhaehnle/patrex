@@ -40,6 +40,13 @@ class Options(object):
 		self.tokenizer = tokenizer
 		self.treeify = treeify
 
+def readuntil(text, pos, delim):
+	end = text.find(delim, pos)
+	if end == -1:
+		raise TextError(text, pos, "no delimiting '%s' found" % (delim))
+	out = text[pos:end]
+	return out, end+len(delim)
+
 def do_compile_maketree(nfa, expr, pos, close, options):
 	escaped = [False]
 	def escape(text, pos):
@@ -53,17 +60,29 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			return None, pos
 
 		startstate = nfa.newstate()
+
+		if text[pos] in [ '<', '>' ]:
+			# Remember the position of previous or next token
+			prev = text[pos] == '<'
+			if text[pos+1] != '|':
+				raise TextError(text, pos, "expected |")
+
+			tag, pos = readuntil(text, pos+2, '|')
+			endstate = nfa.newstate()
+			t = nfa.transition(startstate, endstate, match=None)
+			if prev:
+				t.prevcapture = tag
+			else:
+				t.nextcapture = tag
+
+			return (startstate, endstate), pos
+
 		if text[pos] == '{':
 			# Matching a tagged token
-			pos += 1
-			end = text.find('}', pos)
-			if end == -1:
-				raise TextError(text, pos, "unclosed ${...}")
+			tag, pos = readuntil(text, pos+1, '}')
 
 			endstate = nfa.newstate()
-			nfa.transition(startstate, endstate, nfa_tag(text[pos:end]))
-
-			pos = end+1
+			nfa.transition(startstate, endstate, nfa_tag(tag))
 		elif text[pos] == '(':
 			# Matching a group
 			pos += 1
@@ -89,13 +108,7 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 
 		if text[pos] == '|':
 			# Capturing text range of a match
-			pos += 1
-			end = text.find('|', pos)
-			if end == -1:
-				raise TextError(text, pos, "unclosed escape matcher |...|")
-
-			tag = text[pos:end]
-			pos = end+1
+			tag, pos = readuntil(text, pos+1, '|')
 
 			newstart = nfa.newstate()
 			t = nfa.transition(newstart, startstate, match=None)
