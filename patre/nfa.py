@@ -62,6 +62,7 @@ def nfa_list(nfa, startstate, endstate):
 				return endstates[endstate]
 		return None
 	inner.func_name = "list(%d, %d)" % (startstate, endstate)
+	inner.write = nfa.write
 	return inner
 
 def nfa_any():
@@ -91,6 +92,7 @@ class Nfa(object):
 	def __init__(self):
 		self.states = []
 		self.debug = False
+		self.writing = False
 
 	def newstate(self):
 		self.states.append(Nfa.State())
@@ -105,6 +107,27 @@ class Nfa(object):
 		else:
 			self.states[start].epsilons.append(t)
 		return t
+
+	def insert(self, subnfa):
+		"""
+		Copy all of the sub-NFA's states into this one, returning a state mapping dictionary
+		"""
+		statemap = dict([(i, len(self.states)+i) for i in range(len(subnfa.states))])
+		for state in subnfa.states:
+			self.newstate()
+
+		for oldidx in range(len(subnfa.states)):
+			oldstate = subnfa.states[oldidx]
+			newstate = self.states[statemap[oldidx]]
+			for t in oldstate.transitions:
+				self.transition(statemap[t.start], statemap[t.end], match=t.match)
+			for t in oldstate.epsilons:
+				newt = self.transition(statemap[t.start], statemap[t.end], match=None)
+				newt.callback = t.callback
+				newt.prevcapture = t.prevcapture
+				newt.nextcapture = t.nextcapture
+
+		return statemap
 
 	def expand_epsilons(self, states, prev, next):
 		while type(prev) == list:
@@ -179,6 +202,9 @@ class Nfa(object):
 		"""
 		Output the states and transitions (for debugging)
 		"""
+		if self.writing:
+			return
+		self.writing = True
 		for state in range(len(self.states)):
 			print "%3d:" % (state),
 			first = True
@@ -188,6 +214,8 @@ class Nfa(object):
 				else:
 					print "    ",
 				print "->", transition.end, transition.match
+				if hasattr(transition.match, "write"):
+					transition.match.write()
 
 			for transition in self.states[state].epsilons:
 				if first:
@@ -204,3 +232,4 @@ class Nfa(object):
 				print
 			if first:
 				print
+		self.writing = False

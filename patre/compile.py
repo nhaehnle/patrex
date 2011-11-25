@@ -28,7 +28,7 @@ concise language into non-deterministic finite automata (NFA).
 
 import re
 
-from nfa import Nfa, nfa_token, nfa_tag, nfa_list
+from nfa import Nfa, nfa_token, nfa_tag, nfa_list, nfa_any
 from text import TextError, TextRange
 
 class Options(object):
@@ -60,22 +60,35 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			if end == -1:
 				raise TextError(text, pos, "unclosed ${...}")
 
-			nextstate = nfa.newstate()
-			nfa.transition(startstate, nextstate, nfa_tag(text[pos:end]))
-			currentstate = nextstate
+			endstate = nfa.newstate()
+			nfa.transition(startstate, endstate, nfa_tag(text[pos:end]))
 
 			pos = end+1
 		elif text[pos] == '(':
 			# Matching a group
 			pos += 1
 			tree, end = do_compile_maketree(nfa, text, pos, ")", options)
-			currentstate = do_compile_transitions(nfa, startstate, tree, options)
+			endstate = do_compile_transitions(nfa, startstate, tree, options)
 			pos = end
+		elif text[pos] == '.':
+			# Match anything
+			endstate = nfa.newstate()
+			nfa.transition(startstate, endstate, nfa_any())
+			pos += 1
 		else:
 			raise TextError(text, pos, "unknown escape character '%s'" % (text[pos]))
 
+		if text[pos] in [ '*', '+' ]:
+			# Star operations
+			star = text[pos] == '*'
+			pos += 1
+
+			nfa.transition(endstate, startstate, match=None)
+			if star:
+				nfa.transition(startstate, endstate, match=None)
+
 		if text[pos] == '|':
-			# Capturing information about matches
+			# Capturing text range of a match
 			pos += 1
 			end = text.find('|', pos)
 			if end == -1:
@@ -89,12 +102,12 @@ def do_compile_maketree(nfa, expr, pos, close, options):
 			t.nextcapture = (tag, 0)
 			startstate = newstart
 
-			nextstate = nfa.newstate()
-			t = nfa.transition(currentstate, nextstate, match=None)
+			newend = nfa.newstate()
+			t = nfa.transition(endstate, newend, match=None)
 			t.prevcapture = (tag, 1)
-			currentstate = nextstate
+			endstate = newend
 
-		return (startstate, currentstate), pos
+		return (startstate, endstate), pos
 
 	tok = options.tokenizer(expr, pos, override=escape)
 	tree = options.treeify.maketree(tok(), close)
@@ -110,7 +123,10 @@ def do_compile_transitions(nfa, startstate, tree, options):
 		elif isinstance(token, list):
 			startinner = nfa.newstate()
 			endinner = do_compile_transitions(nfa, startinner, token, options)
-			currentstate = nfa.transition(currentstate, match=nfa_list(nfa, startinner, endinner))
+
+			nextstate = nfa.newstate()
+			nfa.transition(currentstate, nextstate, match=nfa_list(nfa, startinner, endinner))
+			currentstate = nextstate
 		elif isinstance(token, tuple):
 			nfa.transition(currentstate, token[0], None)
 			currentstate = token[1]
