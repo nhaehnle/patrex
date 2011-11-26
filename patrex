@@ -118,6 +118,11 @@ def do_run_program(lst, kv):
 		elif line[0] == "letrange":
 			start,end = prog_get_start_end(kv, line[2:])
 			kv[line[1]] = patre.text.TextRange(currentfiletext, start, end)
+		elif line[0] == "letregex":
+			m = re.match(line[3], str(kv[line[2]]))
+			if not m:
+				raise ValueError("%d: regular expression did not match '%s'" % (linenr, kv[line[2]]))
+			kv[line[1]] = m.groups()[0]
 		else:
 			raise ValueError("%d: unknown command %s" % (linenr, line[0]))
 		idx += 1
