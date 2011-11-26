@@ -1,0 +1,3 @@
+
+match $( [ $.*|x| ] )|m|
+	replace m "{{x}}"

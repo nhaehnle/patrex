@@ -1,0 +1,12 @@
+
+define arg $!(,)*
+define bind boost::bind($.*)
+define new new UI::Callback_Button(${arg}|first|, ${arg}|name|, $(${arg}, ${arg}, ${arg}, ${arg}, ${arg}, ${arg})|mid|, ${bind}|slot| $.*|rest|)
+
+match $<|before| $>|this| capsbuttons->add( ${new}|new|, $.* );
+	letrange gap before this
+	letregex indent gap "\s*(\n[ \t]*)"
+	letregex thename name ".*\"(.*)\".*"
+	insert this "UI::Button * {thename}btn ={indent}\tnew UI::Button({first}, {name}, {mid}{rest});{indent}"
+	insert this "{thename}btn->sigclicked.connect({slot});{indent}"
+	replace new "{thename}btn"

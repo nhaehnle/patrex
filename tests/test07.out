@@ -1,0 +1,33 @@
+	if (igbase().get_display_flag(Interactive_Base::dfDebug)) {
+		UI::Button * debugbtn =
+			new UI::Button(capsbuttons, "debug", 0, 0, 34, 34,
+					g_gr->get_picture(PicMod_UI, "pics/but4.png"),
+					g_gr->get_picture(PicMod_Game,  pic_debug),
+					_("Debug"));
+		debugbtn->sigclicked.connect(boost::bind(&Building_Window::act_debug, boost::ref(*this)));
+		capsbuttons->add
+			(debugbtn,
+				UI::Box::AlignCenter);
+	}
+
+	UI::Button * gotobtn =
+		new UI::Button(capsbuttons, "goto", 0, 0, 34, 34,
+				g_gr->get_picture(PicMod_UI, "pics/but4.png"),
+				g_gr->get_picture(PicMod_Game, "pics/menu_goto.png"));
+	gotobtn->sigclicked.connect(boost::bind(&Building_Window::clicked_goto, boost::ref(*this)));
+	capsbuttons->add
+		(gotobtn,
+			UI::Box::AlignCenter);
+
+	if (m_building.descr().has_help_text()) {
+		capsbuttons->add_inf_space();
+		UI::Button * helpbtn =
+			new UI::Button(capsbuttons, "help", 0, 0, 34, 34,
+				g_gr->get_picture(PicMod_UI, "pics/but4.png"),
+				g_gr->get_picture(PicMod_Game, "pics/menu_help.png"),
+				_("Help"));
+		helpbtn->sigclicked.connect(boost::bind(&Building_Window::help_clicked, boost::ref(*this)));
+		capsbuttons->add
+			(helpbtn,
+				UI::Box::AlignCenter);
+	}
