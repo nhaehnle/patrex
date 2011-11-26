@@ -61,7 +61,7 @@ def cppliteral(text, pos):
 	return None, None
 
 tokenizer = Tokenizer()
-tokenizer.addfn(tok_regex(re.compile("[a-zA-z_][a-zA-Z_0-9]*", re.VERBOSE), "id"))
+tokenizer.addfn(tok_regex(re.compile("[a-zA-Z_][a-zA-Z_0-9]*", re.VERBOSE), "id"))
 tokenizer.addfn(cppcomment)
 tokenizer.addfn(cppliteral)
 tokenizer.addfn(tok_whitespace([' ', '\t', '\n']), -100)

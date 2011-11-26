@@ -39,6 +39,7 @@ def tok_whitespace(white):
 		while pos < len(text) and text[pos] in white:
 			pos += 1
 		return None, pos
+	inner.func_name = "whitespace"
 	return inner
 
 def tok_fallback():
@@ -48,6 +49,7 @@ def tok_fallback():
 	"""
 	def inner(text, pos):
 		return TextRange(text, pos, pos + 1), pos + 1
+	inner.func_name = "fallback"
 	return inner
 
 def tok_regex(regex, tag=None):
@@ -64,6 +66,10 @@ def tok_regex(regex, tag=None):
 			return TextRange(text, pos, m.end(), tag), m.end()
 		else:
 			return None, None
+	if tag != None:
+		inner.func_name = "regex(tag=%s)" % (tag)
+	else:
+		inner.func_name = "regex"
 	return inner
 
 class Tokenizer(object):
