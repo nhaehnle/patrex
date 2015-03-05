@@ -233,7 +233,7 @@ def parse_script(fname):
 			sub(lst[0])
 			lst = None
 			indents = None
-			continue
+			sub = None
 
 		line = line.strip()
 		if not line or line[0] == '#':
@@ -288,7 +288,6 @@ if args.inputs:
 		else:
 			print editor.apply(currentfiletext),
 else:
-	print >>sys.stderr, "from sys.stdin"
 	currentfiletext = sys.stdin.read()
 	tree = treeify.maketree(tokenizer.tokenize(currentfiletext))
 

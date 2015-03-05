@@ -1,0 +1,4 @@
+
+p = new(sizeof(Foo), mem0) Foo(arg0, arg1);
+
+q = new(sizeof(*q), mem1) Sub::Holder<Bar>(arg0);

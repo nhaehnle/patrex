@@ -1,0 +1,4 @@
+
+p = make<Foo>(mem0)(arg0, arg1);
+
+q = make<Sub::Holder<Bar> >(mem1)(arg0);

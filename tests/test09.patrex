@@ -1,0 +1,9 @@
+define arg $!(,)*
+define notlist $!( ( $.* ) )
+define notlist_angle $!( $|( ( $.* ) )(>) )
+
+match $( new ( sizeof($.*), ${arg}|mem|) $( ${notlist}* ${notlist_angle} )|type| )|all| ($.*)
+	replace all "make<{type}>({mem})"
+
+match $( new ( sizeof($.*), ${arg}|mem|) $( ${notlist}* > )|type| )|all| ($.*)
+	replace all "make<{type} >({mem})"
