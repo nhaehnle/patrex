@@ -289,7 +289,6 @@ if args.inputs:
 			print editor.apply(currentfiletext),
 else:
 	currentfiletext = sys.stdin.read()
-	tree = treeify.maketree(tokenizer.tokenize(currentfiletext))
 
 	editor = patre.text.Editor()
 
