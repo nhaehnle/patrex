@@ -274,19 +274,22 @@ if args.debug:
 
 if args.inputs:
 	for fname in args.inputs:
-		with open(fname, 'r') as filp:
-			currentfiletext = filp.read()
+		try:
+			with open(fname, 'r') as filp:
+				currentfiletext = filp.read()
 
-		editor = patre.text.Editor()
+			editor = patre.text.Editor()
 
-		tree = options.treeify.maketree(options.tokenizer(currentfiletext)())
-		nfa(tree, globalstart)
+			tree = options.treeify.maketree(options.tokenizer(currentfiletext)())
+			nfa(tree, globalstart)
 
-		if args.inplace:
-			with open(fname, 'w') as filp:
-				print >>filp, editor.apply(currentfiletext),
-		else:
-			print editor.apply(currentfiletext),
+			if args.inplace:
+				with open(fname, 'w') as filp:
+					print >>filp, editor.apply(currentfiletext),
+			else:
+				print editor.apply(currentfiletext),
+		except Exception as e:
+			print >>sys.stderr, "Error processing %s: %s" % (fname, e)
 else:
 	currentfiletext = sys.stdin.read()
 
