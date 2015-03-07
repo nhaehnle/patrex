@@ -1,0 +1,7 @@
+
+match $<|before| $>|this| $( dolist( $!(,)*|obj|, $( $!(,)*|param| )+(,)[params] ); )|call|
+	letrange gap before call.start
+	erase gap
+	erase call
+	forall params
+		insert call.start "{gap}do({obj}, {param});"

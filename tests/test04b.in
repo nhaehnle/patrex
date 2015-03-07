@@ -1,0 +1,4 @@
+
+	{
+		dolist(obj, a, b);
+	}

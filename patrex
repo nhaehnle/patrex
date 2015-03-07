@@ -122,7 +122,10 @@ def do_run_program(lst, kv):
 			m = re.match(line[3], str(kv[line[2]]))
 			if not m:
 				raise ValueError("%d: regular expression did not match '%s'" % (linenr, kv[line[2]]))
-			kv[line[1]] = m.groups()[0]
+			whichgroup = 1
+			if len(line) >= 5:
+				whichgroup = int(line[4])
+			kv[line[1]] = m.group(whichgroup)
 		else:
 			raise ValueError("%d: unknown command %s" % (linenr, line[0]))
 		idx += 1
