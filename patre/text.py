@@ -124,3 +124,6 @@ class Editor(object):
 
 		return ''.join(gen)
 
+	def have_changes(self):
+		return len(self.inserts) > 0 or len(self.erases) > 0
+

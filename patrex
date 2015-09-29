@@ -50,7 +50,7 @@ parser = argparse.ArgumentParser(description='Parenthesis-aware context-free gra
 parser.add_argument('script', metavar='script', type=str, help='CFG definition and command script')
 parser.add_argument('inputs', metavar='FILE', type=str, nargs='*', help='input file(s); if not set, read from STDIN')
 parser.add_argument('--debug', '-d', action='store_true', help='print debugging output')
-parser.add_argument('--inplace', '-i', action='store_true', help='modify input files in place instead of writing to STDOUT')
+parser.add_argument('--inplace', '-p', action='store_true', help='modify input files in place instead of writing to STDOUT')
 
 args = parser.parse_args()
 
@@ -287,8 +287,9 @@ if args.inputs:
 			nfa(tree, globalstart)
 
 			if args.inplace:
-				with open(fname, 'w') as filp:
-					print >>filp, editor.apply(currentfiletext),
+				if editor.have_changes():
+					with open(fname, 'w') as filp:
+						print >>filp, editor.apply(currentfiletext),
 			else:
 				print editor.apply(currentfiletext),
 		except Exception as e:
